@@ -245,6 +245,7 @@ Wichtige Defaults und Umgebungsvariablen:
 \begin{itemize}
   \item \code{OPENCODE\_GO\_MODEL}: erforderlich; kein hartcodierter Launcher-Default.
   \item \code{OPENCODE\_GO\_PROXY\_PORT=4141}.
+  \item \code{OPENCODE\_GO\_UPSTREAM\_RETRIES=2}.
   \item \code{CLAUDE\_CODE\_MODEL\_ALIAS=sonnet}.
   \item \code{CLAUDE\_CODE\_OPENCODE\_GO\_BARE=1}.
 \end{itemize}
@@ -258,10 +259,11 @@ body.model = model
 \end{verbatim}
 
 Bei Generierungsrequests streamt der Proxy die Antwort von OpenCode Go zurueck
-an Claude Code. Er beachtet Node-Stream-Backpressure und bricht den
-Upstream-Request ab, wenn Claude Code die lokale Verbindung schliesst. Dadurch
-sollte eine kurzzeitige \code{connection interrupted}-Meldung nicht den
-Proxy-Prozess beenden.
+an Claude Code. Er beachtet Node-Stream-Backpressure, bricht den
+Upstream-Request ab, wenn Claude Code die lokale Verbindung schliesst,
+wiederholt retrybare Upstream-Verbindungsfehler vor dem Senden der
+Response-Header und wandelt Upstream-Resets mitten im Stream in ein sauberes
+Streaming-Error-Event um, statt den Proxy-Prozess zu beenden.
 
 Der Proxy implementiert ausserdem Endpunkte, die Claude Code abfragt:
 

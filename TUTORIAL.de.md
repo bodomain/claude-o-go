@@ -223,6 +223,7 @@ Standardwerte / erforderliche Env:
 
 - `OPENCODE_GO_MODEL` — **erforderlich**, kein fest codierter Default. Definiere es in `~/.bashrc` / `~/.zshrc` (z. B. `export OPENCODE_GO_MODEL=qwen3.7-plus`). Pro Aufruf ueberschreibbar.
 - `OPENCODE_GO_PROXY_PORT=4141`
+- `OPENCODE_GO_UPSTREAM_RETRIES=2`
 - `CLAUDE_CODE_MODEL_ALIAS=sonnet`
 - `CLAUDE_CODE_OPENCODE_GO_BARE=1`
 
@@ -240,7 +241,7 @@ body.model = model
 
 Dadurch wird Claude Codes Modellname durch das OpenCode Go Modell ersetzt, bevor der Request weitergeleitet wird.
 
-Bei Generierungsrequests streamt der Proxy die Antwort von OpenCode Go zurueck an Claude Code. Er beachtet Node-Stream-Backpressure und bricht den Upstream-Request ab, wenn Claude Code die lokale Verbindung schliesst. Dadurch sollte eine kurzzeitige `connection interrupted`-Meldung nicht den Proxy-Prozess beenden.
+Bei Generierungsrequests streamt der Proxy die Antwort von OpenCode Go zurueck an Claude Code. Er beachtet Node-Stream-Backpressure, bricht den Upstream-Request ab, wenn Claude Code die lokale Verbindung schliesst, wiederholt retrybare Upstream-Verbindungsfehler vor dem Senden der Response-Header und wandelt Upstream-Resets mitten im Stream in ein sauberes Streaming-Error-Event um, statt den Proxy-Prozess zu beenden.
 
 Der Proxy implementiert ausserdem ein paar kleine Endpunkte, die Claude Code beim Start oder waehrend der Nutzung abfragt:
 

@@ -5,6 +5,7 @@ const apiKey = process.env.OPENCODE_GO_API_KEY
 const model = process.env.OPENCODE_GO_MODEL || "qwen3.7-plus"
 const upstream = process.env.OPENCODE_GO_BASE_URL || "https://opencode.ai/zen/go/v1"
 const port = Number(process.env.OPENCODE_GO_PROXY_PORT || 4141)
+const upstreamRetries = Number(process.env.OPENCODE_GO_UPSTREAM_RETRIES || 2)
 
 if (!apiKey) {
   console.error("OPENCODE_GO_API_KEY is required.")
@@ -29,6 +30,20 @@ function sendJson(response, status, body) {
   response.end(JSON.stringify(body))
 }
 
+function errorMessage(error) {
+  const cause = error.cause ? ` (${error.cause.code || error.cause.message})` : ""
+  return `${error.message}${cause}`
+}
+
+function isRetryableUpstreamError(error) {
+  const code = error.cause?.code || error.code
+  return error.name !== "AbortError" && ["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "UND_ERR_SOCKET"].includes(code)
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 async function writeChunk(response, chunk) {
   if (response.destroyed || response.writableEnded) return false
   if (response.write(chunk)) return true
@@ -40,6 +55,43 @@ async function writeChunk(response, chunk) {
   ])
 
   return !response.destroyed && !response.writableEnded
+}
+
+async function writeStreamError(response, error) {
+  if (response.destroyed || response.writableEnded) return
+
+  const payload = JSON.stringify({
+    type: "error",
+    error: {
+      type: "api_error",
+      message: `OpenCode Go upstream stream ended unexpectedly: ${errorMessage(error)}`,
+    },
+  })
+
+  await writeChunk(response, `event: error\ndata: ${payload}\n\n`)
+  if (!response.writableEnded) response.end()
+}
+
+async function fetchUpstream(url, options) {
+  let lastError
+
+  for (let attempt = 1; attempt <= upstreamRetries + 1; attempt += 1) {
+    try {
+      return await fetch(url, options)
+    } catch (error) {
+      lastError = error
+
+      if (options.signal.aborted || !isRetryableUpstreamError(error) || attempt > upstreamRetries) {
+        throw error
+      }
+
+      const delayMs = 500 * attempt
+      console.error(`upstream fetch failed (${errorMessage(error)}), retrying in ${delayMs}ms (${attempt}/${upstreamRetries})`)
+      await sleep(delayMs)
+    }
+  }
+
+  throw lastError
 }
 
 async function proxyMessages(request, response, suffix) {
@@ -68,7 +120,7 @@ async function proxyMessages(request, response, suffix) {
     headers["anthropic-beta"] = request.headers["anthropic-beta"]
   }
 
-  const upstreamResponse = await fetch(`${upstream}${suffix}`, {
+  const upstreamResponse = await fetchUpstream(`${upstream}${suffix}`, {
     method: request.method,
     headers,
     body: JSON.stringify(body),
@@ -92,7 +144,9 @@ async function proxyMessages(request, response, suffix) {
       }
     } catch (error) {
       if (abortController.signal.aborted || response.destroyed) return
-      throw error
+      console.error(`upstream stream failed: ${errorMessage(error)}`)
+      await writeStreamError(response, error)
+      return
     }
   }
 
@@ -124,7 +178,8 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === "POST" && url.pathname === "/v1/messages") {
-      return proxyMessages(request, response, "/messages")
+      await proxyMessages(request, response, "/messages")
+      return
     }
 
     sendJson(response, 404, { error: { message: `Unsupported path: ${url.pathname}` } })
@@ -134,8 +189,8 @@ const server = http.createServer(async (request, response) => {
       return
     }
 
-    const status = error.name === "AbortError" ? 499 : 500
-    sendJson(response, status, { error: { message: error.message } })
+    const status = error.name === "AbortError" ? 499 : 502
+    sendJson(response, status, { error: { message: errorMessage(error) } })
   }
 })
 
