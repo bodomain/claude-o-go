@@ -61,7 +61,7 @@ source ~/.bashrc   # bzw.: source ~/.zshrc
 
 ### Warum das funktioniert
 
-Der Launcher loest seinen eigenen Symlink mit `readlink -f` auf und `cd` dadurch immer in das echte Installationsverzeichnis (`/home/user/Desktop/opencode-go-w-claude`). Dort liegen `.env` (dein API-Key) und `opencode-go-claude-proxy.mjs` (der Proxy). Der Launcher funktioniert also egal, aus welchem Verzeichnis du ihn aufrufst.
+Der Launcher loest seinen eigenen Symlink mit `readlink -f` auf und findet dadurch das echte Installationsverzeichnis (`/home/user/Desktop/opencode-go-w-claude`). Dort liegen `.env` (dein API-Key) und `opencode-go-claude-proxy.mjs` (der Proxy). Claude Code selbst startet wieder in dem Verzeichnis, aus dem du `claude-o-go` aufgerufen hast, sodass dein aktuelles Projekt das Arbeitsverzeichnis bleibt.
 
 ### Optional: API-Key und Modell in der Shell-Profile exportieren
 

@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(dirname "$(readlink -f "$0")")"
+project_dir="$PWD"
+install_dir="$(dirname "$(readlink -f "$0")")"
 
 if [[ -n "${OPENCODE_GO_API_KEY:-}" ]]; then
   api_key="$OPENCODE_GO_API_KEY"
 else
-  api_key="$(sed -n 's/^[[:space:]]*OPENCODE_GO_API_KEY[[:space:]]*=[[:space:]]*//p' .env | head -n 1)"
+  api_key="$(sed -n 's/^[[:space:]]*OPENCODE_GO_API_KEY[[:space:]]*=[[:space:]]*//p' "$install_dir/.env" | head -n 1)"
   if [[ -z "$api_key" ]]; then
-    api_key="$(sed -n '/^[[:space:]]*#/d; /^[[:space:]]*$/d; s/^[[:space:]]*//; s/[[:space:]]*$//; 1p' .env)"
+    api_key="$(sed -n '/^[[:space:]]*#/d; /^[[:space:]]*$/d; s/^[[:space:]]*//; s/[[:space:]]*$//; 1p' "$install_dir/.env")"
   fi
 fi
 
@@ -31,11 +32,13 @@ export ANTHROPIC_CUSTOM_MODEL_OPTION_NAME="${OPENCODE_GO_MODEL_NAME:-OpenCode Go
 export ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION="${OPENCODE_GO_MODEL_DESCRIPTION:-OpenCode Go model via Anthropic-compatible Messages API}"
 
 if [[ "${CLAUDE_CODE_OPENCODE_GO_PROXY:-1}" == "1" ]]; then
-  node opencode-go-claude-proxy.mjs &
+  node "$install_dir/opencode-go-claude-proxy.mjs" &
   proxy_pid="$!"
   trap 'kill "$proxy_pid" 2>/dev/null || true' EXIT INT TERM
   sleep 0.3
 fi
+
+cd "$project_dir"
 
 if [[ "${CLAUDE_CODE_OPENCODE_GO_BARE:-1}" == "1" ]]; then
   claude --bare --model "$claude_model_alias" "$@"

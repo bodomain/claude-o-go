@@ -102,10 +102,11 @@ source ~/.bashrc   # oder: source ~/.zshrc
 
 \subsection{Warum das funktioniert}
 
-Der Launcher loest seinen eigenen Symlink mit \code{readlink -f} auf. Danach
-wechselt er in das echte Installationsverzeichnis, in dem \code{.env} und
-\code{opencode-go-claude-proxy.mjs} liegen. Dadurch funktioniert der Launcher
-egal, aus welchem Verzeichnis du ihn aufrufst.
+Der Launcher loest seinen eigenen Symlink mit \code{readlink -f} auf. Dadurch
+findet er das echte Installationsverzeichnis, in dem \code{.env} und
+\code{opencode-go-claude-proxy.mjs} liegen. Claude Code selbst startet wieder
+in dem Verzeichnis, aus dem du \code{claude-o-go} aufgerufen hast, sodass dein
+aktuelles Projekt das Arbeitsverzeichnis bleibt.
 
 \subsection{Optionale Shell-Konfiguration}
 

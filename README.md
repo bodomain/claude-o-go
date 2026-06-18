@@ -85,7 +85,7 @@ ln -s /home/user/Desktop/opencode-go-w-claude/claude-o-go ~/.local/bin/claude-o-
 
 Make sure `~/.local/bin` is on your `PATH` (add `export PATH="$HOME/.local/bin:$PATH"` to your `~/.bashrc` / `~/.zshrc` if needed).
 
-The launcher resolves its own symlink with `readlink -f`, so it always finds the `.env` and proxy next to the real install — no matter where you call it from.
+The launcher resolves its own symlink with `readlink -f`, so it always finds the `.env` and proxy next to the real install. Claude Code itself still starts in the directory where you ran `claude-o-go`, so it sees your current project as the working directory.
 
 Then from any project:
 
