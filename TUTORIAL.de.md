@@ -240,6 +240,8 @@ body.model = model
 
 Dadurch wird Claude Codes Modellname durch das OpenCode Go Modell ersetzt, bevor der Request weitergeleitet wird.
 
+Bei Generierungsrequests streamt der Proxy die Antwort von OpenCode Go zurueck an Claude Code. Er beachtet Node-Stream-Backpressure und bricht den Upstream-Request ab, wenn Claude Code die lokale Verbindung schliesst. Dadurch sollte eine kurzzeitige `connection interrupted`-Meldung nicht den Proxy-Prozess beenden.
+
 Der Proxy implementiert ausserdem ein paar kleine Endpunkte, die Claude Code beim Start oder waehrend der Nutzung abfragt:
 
 ```text
@@ -255,6 +257,16 @@ Der eigentliche Generierungsrequest ist:
 ```text
 POST /v1/messages
 ```
+
+## Lokale Checks
+
+Vor dem Push ausfuehren:
+
+```sh
+npm run check
+```
+
+Das prueft die Syntax von `opencode-go-claude-example.mjs` und `opencode-go-claude-proxy.mjs`.
 
 ## Pruefen, ob wirklich OpenCode Go verwendet wird
 

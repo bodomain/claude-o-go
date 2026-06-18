@@ -16,7 +16,7 @@ OpenCode Go does not provide Claude models. It provides open coding models (e.g.
 ## What is in this directory
 
 - `claude-o-go` — the launcher. Starts the local proxy, sets `ANTHROPIC_BASE_URL`, and runs `claude`. This is what you run instead of `claude`.
-- `opencode-go-claude-proxy.mjs` — the local proxy that rewrites the model name and forwards requests to OpenCode Go.
+- `opencode-go-claude-proxy.mjs` — the local proxy that rewrites the model name, forwards requests to OpenCode Go, and streams responses back to Claude Code.
 - `opencode-go-claude-example.mjs` — a direct API example that calls the same `/messages` endpoint without Claude Code.
 - `.env` — your OpenCode Go API key.
 
@@ -57,9 +57,11 @@ OPENCODE_GO_MODEL=minimax-m3 ./claude-o-go
 5. Claude Code (the harness) sends a `POST /v1/messages` request to the proxy.
 6. The proxy rewrites `model` in the body from `sonnet` to the OpenCode Go model (e.g. `qwen3.7-plus`) and forwards it to `https://opencode.ai/zen/go/v1/messages`.
 7. OpenCode Go (the backend) runs the model and returns the response.
-8. The proxy passes the response back to Claude Code, which renders it in the CLI.
+8. The proxy streams the response back to Claude Code, which renders it in the CLI.
 
 The proxy is needed because Claude Code validates Claude model names locally and rejects names like `qwen3.7-plus` before any request is sent. With the proxy, Claude Code keeps using `sonnet`, and the rewrite happens on the way out.
+
+The proxy handles long streaming responses with Node stream backpressure and aborts the upstream request if Claude Code closes the local connection. That prevents transient client-side interruptions from taking down the proxy process.
 
 By default the launcher adds `--bare`, which makes Claude Code use API-key auth directly and skip OAuth/keychain/background traffic. To run full Claude Code startup behavior anyway:
 
@@ -121,6 +123,16 @@ Use a different Claude-compatible OpenCode Go model:
 ```sh
 OPENCODE_GO_MODEL=minimax-m3 npm start
 ```
+
+## Local Checks
+
+Run the syntax checks before pushing changes:
+
+```sh
+npm run check
+```
+
+This checks both the direct API example and the local Claude proxy.
 
 ## Available OpenCode Go models
 

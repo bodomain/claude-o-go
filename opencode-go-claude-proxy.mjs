@@ -1,4 +1,5 @@
 import http from "node:http"
+import { once } from "node:events"
 
 const apiKey = process.env.OPENCODE_GO_API_KEY
 const model = process.env.OPENCODE_GO_MODEL || "qwen3.7-plus"
@@ -23,14 +24,39 @@ function readBody(request) {
 }
 
 function sendJson(response, status, body) {
+  if (response.destroyed || response.writableEnded) return
   response.writeHead(status, { "content-type": "application/json" })
   response.end(JSON.stringify(body))
 }
 
+async function writeChunk(response, chunk) {
+  if (response.destroyed || response.writableEnded) return false
+  if (response.write(chunk)) return true
+
+  await Promise.race([
+    once(response, "drain"),
+    once(response, "close"),
+    once(response, "error"),
+  ])
+
+  return !response.destroyed && !response.writableEnded
+}
+
 async function proxyMessages(request, response, suffix) {
   const rawBody = await readBody(request)
-  const body = rawBody ? JSON.parse(rawBody) : {}
+  let body
+
+  try {
+    body = rawBody ? JSON.parse(rawBody) : {}
+  } catch {
+    return sendJson(response, 400, { error: { message: "Invalid JSON request body." } })
+  }
+
   body.model = model
+  const abortController = new AbortController()
+  response.on("close", () => {
+    if (!response.writableEnded) abortController.abort()
+  })
 
   const headers = {
     "content-type": "application/json",
@@ -46,6 +72,7 @@ async function proxyMessages(request, response, suffix) {
     method: request.method,
     headers,
     body: JSON.stringify(body),
+    signal: abortController.signal,
   })
 
   console.error(`${request.method} ${suffix} -> ${upstreamResponse.status} as ${model}`)
@@ -55,9 +82,21 @@ async function proxyMessages(request, response, suffix) {
   })
 
   if (upstreamResponse.body) {
-    for await (const chunk of upstreamResponse.body) response.write(chunk)
+    try {
+      for await (const chunk of upstreamResponse.body) {
+        const stillConnected = await writeChunk(response, chunk)
+        if (!stillConnected) {
+          abortController.abort()
+          return
+        }
+      }
+    } catch (error) {
+      if (abortController.signal.aborted || response.destroyed) return
+      throw error
+    }
   }
-  response.end()
+
+  if (!response.writableEnded) response.end()
 }
 
 const server = http.createServer(async (request, response) => {
@@ -90,8 +129,19 @@ const server = http.createServer(async (request, response) => {
 
     sendJson(response, 404, { error: { message: `Unsupported path: ${url.pathname}` } })
   } catch (error) {
-    sendJson(response, 500, { error: { message: error.message } })
+    if (response.headersSent) {
+      if (!response.destroyed) response.destroy(error)
+      return
+    }
+
+    const status = error.name === "AbortError" ? 499 : 500
+    sendJson(response, status, { error: { message: error.message } })
   }
+})
+
+server.on("clientError", (error, socket) => {
+  console.error(`client error: ${error.message}`)
+  if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\n\r\n")
 })
 
 server.listen(port, "127.0.0.1", () => {

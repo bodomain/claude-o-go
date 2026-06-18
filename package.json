@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node opencode-go-claude-example.mjs",
-    "check": "node --check opencode-go-claude-example.mjs"
+    "check": "node --check opencode-go-claude-example.mjs && node --check opencode-go-claude-proxy.mjs"
   },
   "engines": {
     "node": ">=18"

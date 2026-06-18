@@ -238,6 +238,8 @@ body.model = model
 
 That replaces Claude Code's model with the OpenCode Go model before forwarding the request.
 
+For generation requests, the proxy streams OpenCode Go's response back to Claude Code. It handles Node stream backpressure and aborts the upstream request if Claude Code closes the local connection, so a transient `connection interrupted` message should not take down the proxy process.
+
 It also implements a few small endpoints Claude Code probes, such as:
 
 ```text
@@ -253,6 +255,16 @@ The real generation request is:
 ```text
 POST /v1/messages
 ```
+
+## Local Checks
+
+Before pushing changes, run:
+
+```sh
+npm run check
+```
+
+That syntax-checks both `opencode-go-claude-example.mjs` and `opencode-go-claude-proxy.mjs`.
 
 ## How to Verify You Are Using OpenCode Go
 
