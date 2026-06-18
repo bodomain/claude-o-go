@@ -171,6 +171,61 @@ Der Proxy loest das, indem Claude Code lokal ein normales Claude-Alias wie
 \code{sonnet} sieht. Der Proxy schreibt den ausgehenden Request dann auf das
 OpenCode-Go-Modell um.
 
+\section{Exkurs: Localhost, Ports und Prozesse}
+
+Networking beginnt mit einer einfachen Frage: wohin soll ein Client verbinden?
+
+\begin{itemize}
+  \item \code{127.0.0.1} bedeutet localhost. Die Adresse zeigt auf dieselbe Maschine.
+  \item Ein Port waehlt einen konkreten lauschenden Prozess aus. Der Standard-Port ist \code{4141}.
+  \item Ein Server bindet sich an Adresse und Port. Der Proxy bindet sich an \code{127.0.0.1:4141}.
+  \item Ein Client verbindet sich zu Adresse und Port. Claude Code verbindet sich zur lokalen Proxy-URL:
+\end{itemize}
+
+\begin{verbatim}
+http://127.0.0.1:4141
+\end{verbatim}
+
+\begin{verbatim}
+Claude Code Prozess
+  verbindet zu 127.0.0.1:4141
+
+Node Proxy Prozess
+  lauscht auf 127.0.0.1:4141
+  verbindet nach aussen zu opencode.ai:443
+\end{verbatim}
+
+Der Proxy lauscht auf localhost, nicht auf \code{0.0.0.0}. Das ist wichtig:
+\code{127.0.0.1} ist nur von deiner eigenen Maschine erreichbar.
+\code{0.0.0.0} wuerde den Listener auf allen Netzwerkinterfaces anbieten.
+
+Nuetzliche Admin-Checks:
+
+\begin{verbatim}
+ss -ltnp | grep 4141
+lsof -iTCP:4141 -sTCP:LISTEN
+\end{verbatim}
+
+\section{Exkurs: HTTP-Proxy vs Backend}
+
+Claude Code ist der Client. OpenCode Go ist das Upstream-Backend. Das lokale
+Node-Skript ist ein Proxy.
+
+Ein Proxy nimmt einen Request von einer Seite an und sendet einen verwandten
+Request an eine andere Seite. Er kann den groessten Teil unveraendert lassen,
+einzelne Felder umschreiben und danach die Antwort zurueckreichen.
+
+In diesem Projekt macht der Proxy drei wichtige Dinge:
+
+\begin{enumerate}
+  \item Er nimmt Claude Codes Anthropic-Request unter \code{/v1/messages} an.
+  \item Er schreibt \code{body.model} von Claudes lokalem Alias auf das OpenCode-Go-Modell um.
+  \item Er leitet den Request an OpenCode Go weiter und streamt die Antwort zurueck.
+\end{enumerate}
+
+Der Proxy ist kein Modell-Host. Er erzeugt keine Tokens. Er ist Glue-Code
+zwischen zwei APIs, die fast, aber nicht perfekt, kompatibel sind.
+
 \section{Modell-Kompatibilitaet}
 
 Jeder Upstream-Anbieter implementiert seinen Anthropic-kompatiblen Endpoint
@@ -226,6 +281,60 @@ passiert Folgendes:
   \item OpenCode Go liefert die Modellantwort.
   \item Der Proxy streamt die Antwort zurueck an Claude Code.
 \end{enumerate}
+
+\section{Exkurs: Streaming, SSE und Backpressure}
+
+LLM-Antworten werden normalerweise gestreamt. Das Backend wartet nicht, bis die
+komplette Antwort fertig ist, sondern sendet kleine Chunks, sobald sie
+verfuegbar sind.
+
+Ein haeufiges Web-Muster dafuer ist SSE: Server-Sent Events. Ein SSE-Stream ist
+weiterhin HTTP, aber der Response Body bleibt offen und sendet ueber Zeit
+Events:
+
+\begin{verbatim}
+data: {"type":"content_block_delta","text":"hello"}
+
+data: {"type":"content_block_delta","text":" world"}
+
+data: [DONE]
+\end{verbatim}
+
+Backpressure bedeutet, dass der Empfaenger Daten nicht immer so schnell
+verarbeiten kann, wie der Sender sie schreibt. In Node gibt
+\code{response.write(chunk)} \code{false} zurueck, wenn der Ausgabepuffer voll
+ist. Korrekte Proxy-Logik wartet dann auf \code{drain}, bevor sie
+weiterschreibt. Das verhindert Speicherwachstum und instabile lange Streams.
+
+In diesem Projekt:
+
+\begin{itemize}
+  \item Claude Code liest vom lokalen Proxy.
+  \item Der Proxy liest von OpenCode Go.
+  \item Der Proxy schreibt Chunks an Claude Code und beachtet Node-Stream-Backpressure.
+  \item Wenn Claude Code die lokale Verbindung schliesst, bricht der Proxy den Upstream-Request ab.
+\end{itemize}
+
+Stream-Handling ist empfindlicher als ein einfacher JSON-Request. Ein normaler
+Request hat eine Antwort. Ein Stream ist ein laufendes Gespraech zwischen
+Sockets.
+
+\section{Exkurs: Haeufige Netzwerkfehler}
+
+Diese Fehlernamen gehoeren zum praktischen Admin-Wortschatz:
+
+\begin{itemize}
+  \item \code{ECONNREFUSED}: niemand hat die Verbindung angenommen. Typische Ursachen: falscher Port, Proxy nicht gestartet oder Upstream nicht erreichbar.
+  \item \code{ECONNRESET}: die Gegenseite hat eine bestehende Verbindung zurueckgesetzt. Typische Ursache: der Upstream hat den Socket mitten im Stream geschlossen.
+  \item \code{UND\_ERR\_SOCKET}: Nodes Undici-Client sah einen Socket-Fehler. Meist Reset oder kaputter Stream.
+  \item \code{ETIMEDOUT}: Verbindung oder Antwort dauerte zu lange. Ursache: Netzwerkpfad oder Backend ist zu langsam.
+  \item \code{AbortError}: wir haben den Request absichtlich abgebrochen. Typische Ursache: Claude Code hat die lokale Verbindung geschlossen.
+\end{itemize}
+
+Praktische Regel: Retry vor dem Senden der Response-Header; nach
+Streaming-Beginn den Stream sauber mit einem Error-Event beenden. Sobald Header
+und Teilinhalt gesendet wurden, kann der Proxy daraus keine normale JSON
+\code{502}-Antwort mehr machen.
 
 \section{Wichtige Dateien}
 
@@ -315,6 +424,16 @@ OpenCode Go weitergeleitet, OpenCode Go hat HTTP 200 geliefert, und das Log
 zeigt das verwendete Upstream-Modell.
 
 \section{Haeufige Probleme}
+
+\subsection{Proxy-Logs erscheinen in Claude Codes TUI}
+
+Normale Request-Logs sind standardmaessig ausgeblendet. Zum Debuggen:
+
+\begin{verbatim}
+OPENCODE_GO_PROXY_LOG=1 claude-o-go
+\end{verbatim}
+
+Im normalen Betrieb unset lassen, damit die TUI sauber bleibt.
 
 \subsection{Selected model issue}
 

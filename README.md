@@ -20,7 +20,7 @@ OpenCode Go does not provide Claude models. It provides open coding models (e.g.
 - `opencode-go-claude-example.mjs` — a direct API example that calls the same `/messages` endpoint without Claude Code.
 - `.env` — your OpenCode Go API key.
 
-For a full walkthrough, read `TUTORIAL.md`. Eine deutsche Version gibt es in `TUTORIAL.de.md`.
+For a full walkthrough with practical setup steps and networking theory excursions, read `TUTORIAL.md`. Eine deutsche Version gibt es in `TUTORIAL.de.md`.
 Typeset versions are available as `TUTORIAL.tex` / `TUTORIAL.pdf` and `TUTORIAL.de.tex` / `TUTORIAL.de.pdf`.
 
 ## Quick start
