@@ -61,15 +61,16 @@ source ~/.bashrc   # or: source ~/.zshrc
 
 The launcher resolves its own symlink with `readlink -f`, so it always `cd`s into the real install directory (`/home/user/Desktop/opencode-go-w-claude`). That is where `.env` (your API key) and `opencode-go-claude-proxy.mjs` (the proxy) live. So the launcher works no matter which directory you call it from.
 
-### Optional: export the API key in your shell profile
+### Optional: export the API key and model in your shell profile
 
 If you would rather not keep the key in `.env`, you can export it once in `~/.bashrc` / `~/.zshrc`:
 
 ```sh
 export OPENCODE_GO_API_KEY="sk-..."
+export OPENCODE_GO_MODEL="qwen3.7-plus"
 ```
 
-The launcher picks up `OPENCODE_GO_API_KEY` from the environment and skips reading `.env`.
+The launcher picks up `OPENCODE_GO_API_KEY` from the environment and skips reading `.env`. The model is no longer hardcoded in `claude-o-go` — define it here in your shell profile so it applies everywhere.
 
 ### Daily usage
 
@@ -100,6 +101,8 @@ To update, just `git pull` (or replace the files) inside `/home/user/Desktop/ope
 
 OpenCode Go exposes several models through an Anthropic-compatible Messages API.
 
+OpenCode Go is a **routing and billing layer, not a model host**. One subscription gives you a single Anthropic-compatible endpoint, but each request is routed to the model vendor's own API: Qwen models run on Alibaba's API, MiniMax on MiniMax's API, Kimi on Moonshot AI's API, DeepSeek on DeepSeek's API, GLM on Z.ai's API (Zhipu AI). You pay OpenCode; OpenCode pays the upstream providers. Think of it like OpenRouter — aggregation, not hosting.
+
 For example, OpenCode Go accepts models like:
 
 ```text
@@ -119,6 +122,31 @@ claude --model qwen3.7-plus
 Claude Code rejects it before the request is useful, because `qwen3.7-plus` is not one of Claude Code's known Claude model names.
 
 The proxy solves this by letting Claude Code think it is using a normal Claude alias such as `sonnet`, while the proxy rewrites the outgoing request to use an OpenCode Go model.
+
+## Model Compatibility With the Claude Code Harness
+
+Because each upstream vendor implements its own Anthropic-compatible endpoint, maturity varies. Claude Code sends a full Anthropic-style payload — tools (`tools: [{name, description, input_schema}]`), `cache_control`, `tool_choice`, `anthropic-beta` headers. Some vendors' shims accept that; others expect the OpenAI tool shape or reject extra parameters.
+
+Tested through the full `claude-o-go` flow:
+
+| Model `id` | Upstream provider | Works with Claude Code harness? |
+|---|---|---|
+| `qwen3.7-plus` | Alibaba (Qwen) | ✅ Yes |
+| `minimax-m3` | MiniMax | ✅ Yes |
+| `glm-5.2` | Z.ai (Zhipu AI) | ❌ No — `Invalid API parameter` |
+| `glm-5.1` | Z.ai (Zhipu AI) | ❌ No — same as glm-5.2 |
+| `kimi-k2.7-code` | Moonshot AI | ❌ No — rejects tool `function name` format |
+| `deepseek-v4-pro` | DeepSeek | ❌ No — rejects `tools[0].function` (expects OpenAI tool shape) |
+
+Models from the same vendor generally behave the same as the tested one. Unverified models (`mimo-*`, `hy3-preview`, older Qwen/MiniMax/Kimi/DeepSeek versions) — test before relying on them.
+
+The failing models still work against the raw `/messages` endpoint for plain text (see `npm start`). It is specifically Claude Code's tool-calling schema that the upstream shims don't fully translate yet.
+
+**Practical recommendation:** set your shell profile to a known-working model:
+
+```sh
+export OPENCODE_GO_MODEL="qwen3.7-plus"   # or minimax-m3
+```
 
 ## Request Flow
 
@@ -189,9 +217,9 @@ export ANTHROPIC_BASE_URL="http://127.0.0.1:${proxy_port}"
 claude --bare --model "$claude_model_alias" "$@"
 ```
 
-By default:
+Defaults / required env:
 
-- `OPENCODE_GO_MODEL=qwen3.7-plus`
+- `OPENCODE_GO_MODEL` — **required**, no hardcoded default. Set it in `~/.bashrc` / `~/.zshrc` (e.g. `export OPENCODE_GO_MODEL=qwen3.7-plus`). Can be overridden per-invocation.
 - `OPENCODE_GO_PROXY_PORT=4141`
 - `CLAUDE_CODE_MODEL_ALIAS=sonnet`
 - `CLAUDE_CODE_OPENCODE_GO_BARE=1`
@@ -260,16 +288,22 @@ Claude Code itself may still display `sonnet`. That is expected. `sonnet` is the
 
 ## Changing the OpenCode Go Model
 
-Use `OPENCODE_GO_MODEL`:
+The model is set in your shell profile (`~/.bashrc` / `~/.zshrc`):
 
 ```sh
-OPENCODE_GO_MODEL=minimax-m3 ./claude-o-go
+export OPENCODE_GO_MODEL=qwen3.7-plus
+```
+
+To use a different model for a single run, override it inline:
+
+```sh
+OPENCODE_GO_MODEL=minimax-m3 claude-o-go
 ```
 
 Verify it with:
 
 ```sh
-OPENCODE_GO_MODEL=minimax-m3 ./claude-o-go -p "Reply with exactly: OK"
+OPENCODE_GO_MODEL=minimax-m3 claude-o-go -p "Reply with exactly: OK"
 ```
 
 Expected proxy log:

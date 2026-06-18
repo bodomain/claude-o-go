@@ -7,7 +7,9 @@ This lets you keep the Claude Code CLI experience — the terminal UI, tools, pr
 ## What is the harness, what is the backend
 
 - **Claude Code** is the *harness*: the CLI, the REPL, tool calling, file editing, permissions, and the agent loop. It expects to talk to an Anthropic-compatible `/v1/messages` endpoint.
-- **OpenCode Go** is the *backend*: the actual model that generates responses. OpenCode Go does not provide Claude models. It provides open coding models (e.g. `qwen3.7-plus`, `minimax-m3`), exposed through a Claude-compatible `/messages` API.
+- **OpenCode Go** is the *backend* — but it is a **routing and billing layer, not a model host**. One OpenCode Go subscription gives you a single Anthropic-compatible endpoint, but the actual inference is routed to each model vendor's own API: Qwen models run on Alibaba's API, MiniMax on MiniMax's API, Kimi on Moonshot AI's API, DeepSeek on DeepSeek's API, GLM on Z.ai's API (Zhipu AI), and so on. You pay OpenCode; OpenCode pays the upstream providers. Think of it like OpenRouter — aggregation, not hosting.
+
+OpenCode Go does not provide Claude models. It provides open coding models (e.g. `qwen3.7-plus`, `minimax-m3`, `glm-5.2`), exposed through a Claude-compatible `/messages` API. Because each upstream vendor implements that Anthropic-compatible endpoint independently, maturity varies — see the compatibility table below.
 
 `claude-o-go` glues the two together: it points Claude Code at a small local proxy, and the proxy forwards each request to OpenCode Go with the model name rewritten. Claude Code keeps thinking it is talking to `sonnet`; OpenCode Go actually answers.
 
@@ -89,11 +91,14 @@ cd /path/to/any/project
 claude-o-go
 ```
 
-Optionally export the API key in your shell profile instead of keeping it in `.env`:
+Optionally export the API key and model in your shell profile instead of keeping them in `.env` / the launcher:
 
 ```sh
 export OPENCODE_GO_API_KEY="sk-..."
+export OPENCODE_GO_MODEL="qwen3.7-plus"
 ```
+
+The model is no longer hardcoded in `claude-o-go` — set it once in `~/.bashrc` / `~/.zshrc` and the launcher picks it up. You can still override it per-invocation with `OPENCODE_GO_MODEL=minimax-m3 claude-o-go`.
 
 ## Direct API Example (no harness)
 
@@ -119,13 +124,37 @@ OPENCODE_GO_MODEL=minimax-m3 npm start
 
 ## Available OpenCode Go models
 
-Models documented for the Claude-style endpoint include:
+OpenCode Go routes to each vendor's own API. The model `id` you pass to `OPENCODE_GO_MODEL` is what OpenCode Go expects; the upstream provider is shown for context:
 
-- `minimax-m3`
-- `minimax-m2.7`
-- `minimax-m2.5`
-- `qwen3.7-max`
-- `qwen3.7-plus`
-- `qwen3.6-plus`
+| Model `id` | Upstream provider | Works with Claude Code harness? |
+|---|---|---|
+| `qwen3.7-plus` | Alibaba (Qwen) | ✅ Yes |
+| `qwen3.7-max` | Alibaba (Qwen) | ✅ Likely (same shim as qwen3.7-plus) |
+| `qwen3.6-plus` | Alibaba (Qwen) | ✅ Likely |
+| `qwen3.5-plus` | Alibaba (Qwen) | ✅ Likely |
+| `minimax-m3` | MiniMax | ✅ Yes |
+| `minimax-m2.7` | MiniMax | ✅ Likely |
+| `minimax-m2.5` | MiniMax | ✅ Likely |
+| `glm-5.2` | Z.ai (Zhipu AI) | ❌ No — `Invalid API parameter` on Claude Code's tool payload |
+| `glm-5.1` | Z.ai (Zhipu AI) | ❌ No — same as glm-5.2 |
+| `glm-5` | Z.ai (Zhipu AI) | ❌ Likely no |
+| `kimi-k2.7-code` | Moonshot AI | ❌ No — rejects Claude Code's tool `function name` format |
+| `kimi-k2.6` | Moonshot AI | ❌ Likely no |
+| `kimi-k2.5` | Moonshot AI | ❌ Likely no |
+| `deepseek-v4-pro` | DeepSeek | ❌ No — rejects `tools[0].function` (expects OpenAI tool shape) |
+| `deepseek-v4-flash` | DeepSeek | ❌ Likely no |
+| `mimo-v2-pro` | Xiaomi (MiMo) | ⚠️ Unknown — test before relying on it |
+| `mimo-v2-omni` | Xiaomi (MiMo) | ⚠️ Unknown |
+| `mimo-v2.5-pro` | Xiaomi (MiMo) | ⚠️ Unknown |
+| `mimo-v2.5` | Xiaomi (MiMo) | ⚠️ Unknown |
+| `hy3-preview` | (preview model) | ⚠️ Unknown |
 
-The default is `qwen3.7-plus`. Override it with `OPENCODE_GO_MODEL`.
+**Why some don't work with the Claude Code harness:** Claude Code sends an Anthropic-style request including tools (`tools: [{name, description, input_schema}]`), `cache_control`, `tool_choice`, and `anthropic-beta` headers. Qwen's and MiniMax's Anthropic-compatible shims accept that full payload. DeepSeek's and Moonshot's shims expect the OpenAI tool shape instead, and Z.ai's newer endpoint rejects some of Claude Code's extra parameters. The failing models still work against the raw `/messages` endpoint for plain text — it is specifically Claude Code's tool-calling schema that the upstream shims don't fully translate yet.
+
+**Practical recommendation:** set your shell profile to a known-working model:
+
+```sh
+export OPENCODE_GO_MODEL="qwen3.7-plus"   # or minimax-m3
+```
+
+The model is no longer hardcoded in `claude-o-go` — set it in your shell profile (e.g. `export OPENCODE_GO_MODEL=qwen3.7-plus` in `~/.bashrc`). Override per-invocation with `OPENCODE_GO_MODEL=minimax-m3 claude-o-go`.

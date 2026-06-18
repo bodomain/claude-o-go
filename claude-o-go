@@ -17,7 +17,7 @@ if [[ -z "$api_key" ]]; then
   exit 1
 fi
 
-model="${OPENCODE_GO_MODEL:-qwen3.7-plus}"
+model="${OPENCODE_GO_MODEL:?Set OPENCODE_GO_MODEL in ~/.bashrc, e.g.: export OPENCODE_GO_MODEL=qwen3.7-plus}"
 claude_model_alias="${CLAUDE_CODE_MODEL_ALIAS:-sonnet}"
 proxy_port="${OPENCODE_GO_PROXY_PORT:-4141}"
 
