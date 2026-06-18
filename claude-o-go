@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$(readlink -f "$0")")"
+
+if [[ -n "${OPENCODE_GO_API_KEY:-}" ]]; then
+  api_key="$OPENCODE_GO_API_KEY"
+else
+  api_key="$(sed -n 's/^[[:space:]]*OPENCODE_GO_API_KEY[[:space:]]*=[[:space:]]*//p' .env | head -n 1)"
+  if [[ -z "$api_key" ]]; then
+    api_key="$(sed -n '/^[[:space:]]*#/d; /^[[:space:]]*$/d; s/^[[:space:]]*//; s/[[:space:]]*$//; 1p' .env)"
+  fi
+fi
+
+if [[ -z "$api_key" ]]; then
+  echo "Missing OpenCode Go API key in .env or OPENCODE_GO_API_KEY." >&2
+  exit 1
+fi
+
+model="${OPENCODE_GO_MODEL:-qwen3.7-plus}"
+claude_model_alias="${CLAUDE_CODE_MODEL_ALIAS:-sonnet}"
+proxy_port="${OPENCODE_GO_PROXY_PORT:-4141}"
+
+export ANTHROPIC_API_KEY="$api_key"
+export OPENCODE_GO_API_KEY="$api_key"
+export OPENCODE_GO_MODEL="$model"
+export OPENCODE_GO_PROXY_PORT="$proxy_port"
+export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-http://127.0.0.1:${proxy_port}}"
+export ANTHROPIC_CUSTOM_MODEL_OPTION="$model"
+export ANTHROPIC_CUSTOM_MODEL_OPTION_NAME="${OPENCODE_GO_MODEL_NAME:-OpenCode Go ${model}}"
+export ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION="${OPENCODE_GO_MODEL_DESCRIPTION:-OpenCode Go model via Anthropic-compatible Messages API}"
+
+if [[ "${CLAUDE_CODE_OPENCODE_GO_PROXY:-1}" == "1" ]]; then
+  node opencode-go-claude-proxy.mjs &
+  proxy_pid="$!"
+  trap 'kill "$proxy_pid" 2>/dev/null || true' EXIT INT TERM
+  sleep 0.3
+fi
+
+if [[ "${CLAUDE_CODE_OPENCODE_GO_BARE:-1}" == "1" ]]; then
+  claude --bare --model "$claude_model_alias" "$@"
+  exit $?
+fi
+
+claude --model "$claude_model_alias" "$@"

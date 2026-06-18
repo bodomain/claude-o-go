@@ -1,0 +1,13 @@
+{
+  "name": "opencode-go-w-claude",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node opencode-go-claude-example.mjs",
+    "check": "node --check opencode-go-claude-example.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
