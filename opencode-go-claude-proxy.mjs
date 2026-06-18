@@ -6,10 +6,19 @@ const model = process.env.OPENCODE_GO_MODEL || "qwen3.7-plus"
 const upstream = process.env.OPENCODE_GO_BASE_URL || "https://opencode.ai/zen/go/v1"
 const port = Number(process.env.OPENCODE_GO_PROXY_PORT || 4141)
 const upstreamRetries = Number(process.env.OPENCODE_GO_UPSTREAM_RETRIES || 2)
+const proxyLog = process.env.OPENCODE_GO_PROXY_LOG === "1"
 
 if (!apiKey) {
   console.error("OPENCODE_GO_API_KEY is required.")
   process.exit(1)
+}
+
+function log(message) {
+  if (proxyLog) console.error(message)
+}
+
+function logError(message) {
+  console.error(message)
 }
 
 function readBody(request) {
@@ -86,7 +95,7 @@ async function fetchUpstream(url, options) {
       }
 
       const delayMs = 500 * attempt
-      console.error(`upstream fetch failed (${errorMessage(error)}), retrying in ${delayMs}ms (${attempt}/${upstreamRetries})`)
+      logError(`upstream fetch failed (${errorMessage(error)}), retrying in ${delayMs}ms (${attempt}/${upstreamRetries})`)
       await sleep(delayMs)
     }
   }
@@ -127,7 +136,7 @@ async function proxyMessages(request, response, suffix) {
     signal: abortController.signal,
   })
 
-  console.error(`${request.method} ${suffix} -> ${upstreamResponse.status} as ${model}`)
+  log(`${request.method} ${suffix} -> ${upstreamResponse.status} as ${model}`)
 
   response.writeHead(upstreamResponse.status, {
     "content-type": upstreamResponse.headers.get("content-type") || "application/json",
@@ -144,7 +153,7 @@ async function proxyMessages(request, response, suffix) {
       }
     } catch (error) {
       if (abortController.signal.aborted || response.destroyed) return
-      console.error(`upstream stream failed: ${errorMessage(error)}`)
+      logError(`upstream stream failed: ${errorMessage(error)}`)
       await writeStreamError(response, error)
       return
     }
@@ -156,7 +165,7 @@ async function proxyMessages(request, response, suffix) {
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url || "/", `http://${request.headers.host}`)
-    console.error(`${request.method} ${url.pathname}`)
+    log(`${request.method} ${url.pathname}`)
 
     if (request.method === "HEAD" && url.pathname === "/v1") {
       response.writeHead(200)
@@ -195,10 +204,10 @@ const server = http.createServer(async (request, response) => {
 })
 
 server.on("clientError", (error, socket) => {
-  console.error(`client error: ${error.message}`)
+  logError(`client error: ${error.message}`)
   if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\n\r\n")
 })
 
 server.listen(port, "127.0.0.1", () => {
-  console.error(`OpenCode Go Claude proxy listening on http://127.0.0.1:${port}/v1 -> ${model}`)
+  log(`OpenCode Go Claude proxy listening on http://127.0.0.1:${port}/v1 -> ${model}`)
 })

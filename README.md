@@ -63,6 +63,7 @@ OPENCODE_GO_MODEL=minimax-m3 ./claude-o-go
 The proxy is needed because Claude Code validates Claude model names locally and rejects names like `qwen3.7-plus` before any request is sent. With the proxy, Claude Code keeps using `sonnet`, and the rewrite happens on the way out.
 
 The proxy handles long streaming responses with Node stream backpressure, aborts the upstream request if Claude Code closes the local connection, retries retryable upstream connection failures before response headers are sent, and turns mid-stream upstream resets into a clean streaming error event instead of crashing the proxy process.
+Routine proxy request logs are hidden by default so Claude Code's TUI stays clean. Set `OPENCODE_GO_PROXY_LOG=1` for debugging.
 
 By default the launcher adds `--bare`, which makes Claude Code use API-key auth directly and skip OAuth/keychain/background traffic. To run full Claude Code startup behavior anyway:
 

@@ -291,10 +291,11 @@ Das prueft die Syntax beider JavaScript-Einstiegspunkte.
 Starte:
 
 \begin{verbatim}
-./claude-o-go -p "Reply with exactly: OK"
+OPENCODE_GO_PROXY_LOG=1 ./claude-o-go -p "Reply with exactly: OK"
 \end{verbatim}
 
-Achte auf Proxy-Logs wie:
+Proxy-Request-Logs sind im normalen Betrieb ausgeblendet, damit Claude Codes
+TUI sauber bleibt. Mit \code{OPENCODE\_GO\_PROXY\_LOG=1} achte auf Zeilen wie:
 
 \begin{verbatim}
 OpenCode Go Claude proxy listening on http://127.0.0.1:4141/v1 -> qwen3.7-plus

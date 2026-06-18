@@ -272,10 +272,10 @@ That syntax-checks both `opencode-go-claude-example.mjs` and `opencode-go-claude
 Run:
 
 ```sh
-./claude-o-go -p "Reply with exactly: OK"
+OPENCODE_GO_PROXY_LOG=1 ./claude-o-go -p "Reply with exactly: OK"
 ```
 
-Look for proxy log lines like:
+Proxy request logs are hidden during normal use so Claude Code's TUI stays clean. With `OPENCODE_GO_PROXY_LOG=1`, look for lines like:
 
 ```text
 OpenCode Go Claude proxy listening on http://127.0.0.1:4141/v1 -> qwen3.7-plus
@@ -297,7 +297,7 @@ That means:
 - OpenCode Go returned HTTP `200`.
 - The upstream model was `qwen3.7-plus`.
 
-Claude Code itself may still display `sonnet`. That is expected. `sonnet` is the Claude Code-facing alias. The proxy log shows the actual upstream OpenCode Go model.
+Claude Code itself may still display `sonnet`. That is expected. `sonnet` is the Claude Code-facing alias. When debug logging is enabled, the proxy log shows the actual upstream OpenCode Go model.
 
 ## Changing the OpenCode Go Model
 

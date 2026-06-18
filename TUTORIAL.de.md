@@ -274,10 +274,10 @@ Das prueft die Syntax von `opencode-go-claude-example.mjs` und `opencode-go-clau
 Starte:
 
 ```sh
-./claude-o-go -p "Reply with exactly: OK"
+OPENCODE_GO_PROXY_LOG=1 ./claude-o-go -p "Reply with exactly: OK"
 ```
 
-Achte auf Proxy-Logzeilen wie:
+Proxy-Request-Logs sind im normalen Betrieb ausgeblendet, damit Claude Codes TUI sauber bleibt. Mit `OPENCODE_GO_PROXY_LOG=1` achte auf Zeilen wie:
 
 ```text
 OpenCode Go Claude proxy listening on http://127.0.0.1:4141/v1 -> qwen3.7-plus
@@ -299,7 +299,7 @@ Das bedeutet:
 - OpenCode Go hat HTTP `200` zurueckgegeben.
 - Das tatsaechliche Upstream-Modell war `qwen3.7-plus`.
 
-Claude Code selbst kann weiterhin `sonnet` anzeigen. Das ist erwartet. `sonnet` ist nur das Alias, das Claude Code lokal sieht. Das Proxy-Log zeigt das echte OpenCode Go Upstream-Modell.
+Claude Code selbst kann weiterhin `sonnet` anzeigen. Das ist erwartet. `sonnet` ist nur das Alias, das Claude Code lokal sieht. Wenn Debug-Logging aktiv ist, zeigt das Proxy-Log das echte OpenCode Go Upstream-Modell.
 
 ## OpenCode Go Modell wechseln
 

@@ -291,10 +291,11 @@ That syntax-checks both JavaScript entry points.
 Run:
 
 \begin{verbatim}
-./claude-o-go -p "Reply with exactly: OK"
+OPENCODE_GO_PROXY_LOG=1 ./claude-o-go -p "Reply with exactly: OK"
 \end{verbatim}
 
-Look for proxy log lines like:
+Proxy request logs are hidden during normal use so Claude Code's TUI stays
+clean. With \code{OPENCODE\_GO\_PROXY\_LOG=1}, look for lines like:
 
 \begin{verbatim}
 OpenCode Go Claude proxy listening on http://127.0.0.1:4141/v1 -> qwen3.7-plus
