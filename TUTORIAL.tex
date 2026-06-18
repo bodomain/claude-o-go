@@ -1,0 +1,365 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  pdftitle={Using Claude Code With OpenCode Go as the Backend},
+  pdfauthor={claude-o-go}
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.7em}
+\renewcommand{\arraystretch}{1.2}
+
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{\Huge Using Claude Code With OpenCode Go\\[0.4em]\Large A practical backend tutorial for \code{claude-o-go}}
+\author{\code{claude-o-go}}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Goal}
+
+This tutorial explains the setup in this repository and why it works.
+The goal is to keep the Claude Code CLI experience while sending model
+requests to OpenCode Go instead of Anthropic's Claude API.
+
+Claude Code remains the harness: terminal UI, tool calling, file edits,
+permissions, prompt handling, and the agent loop. OpenCode Go is the backend
+that receives the actual model request.
+
+\section{What You Have}
+
+This directory contains:
+
+\begin{itemize}
+  \item \code{.env}: your OpenCode Go API key.
+  \item \code{claude-o-go}: the launcher script you run instead of \code{claude}.
+  \item \code{opencode-go-claude-proxy.mjs}: the local proxy between Claude Code and OpenCode Go.
+  \item \code{opencode-go-claude-example.mjs}: a direct API example that calls OpenCode Go without Claude Code.
+\end{itemize}
+
+The normal command is:
+
+\begin{verbatim}
+cd /home/user/Desktop/opencode-go-w-claude
+./claude-o-go
+\end{verbatim}
+
+For a one-shot prompt:
+
+\begin{verbatim}
+./claude-o-go -p "Reply with exactly: OK"
+\end{verbatim}
+
+\section{Run \code{claude-o-go} From Anywhere}
+
+You do not need to change into this repository every time, and you do not need
+to copy it into each new project. Install it once and use \code{claude-o-go}
+from any project directory.
+
+\subsection{One-Time Setup}
+
+Make the launcher executable if needed:
+
+\begin{verbatim}
+chmod +x /home/user/Desktop/opencode-go-w-claude/claude-o-go
+\end{verbatim}
+
+Create a symlink in a directory already on your \code{PATH}:
+
+\begin{verbatim}
+mkdir -p ~/.local/bin
+ln -s /home/user/Desktop/opencode-go-w-claude/claude-o-go \
+  ~/.local/bin/claude-o-go
+\end{verbatim}
+
+Make sure \code{\textasciitilde{}/.local/bin} is on your \code{PATH}:
+
+\begin{verbatim}
+export PATH="$HOME/.local/bin:$PATH"
+\end{verbatim}
+
+Then reload your shell:
+
+\begin{verbatim}
+source ~/.bashrc   # or: source ~/.zshrc
+\end{verbatim}
+
+\subsection{Why This Works}
+
+The launcher resolves its own symlink with \code{readlink -f}. It then changes
+into the real install directory, where \code{.env} and
+\code{opencode-go-claude-proxy.mjs} live. That makes the launcher work no
+matter where you call it from.
+
+\subsection{Optional Shell Profile Configuration}
+
+If you would rather not keep the key in \code{.env}, export it once in your
+shell profile:
+
+\begin{verbatim}
+export OPENCODE_GO_API_KEY="sk-..."
+export OPENCODE_GO_MODEL="qwen3.7-plus"
+\end{verbatim}
+
+The launcher picks up \code{OPENCODE\_GO\_API\_KEY} from the environment and
+skips reading \code{.env}. The model is no longer hardcoded in the launcher;
+define \code{OPENCODE\_GO\_MODEL} in your shell profile so it applies
+everywhere.
+
+\subsection{Daily Usage}
+
+From any project directory:
+
+\begin{verbatim}
+cd /path/to/any/project
+claude-o-go
+\end{verbatim}
+
+For a one-shot:
+
+\begin{verbatim}
+claude-o-go -p "Explain this repository in one paragraph."
+\end{verbatim}
+
+Switch models for a single invocation:
+
+\begin{verbatim}
+OPENCODE_GO_MODEL=minimax-m3 claude-o-go
+\end{verbatim}
+
+\section{Why a Proxy Is Needed}
+
+OpenCode Go exposes several models through an Anthropic-compatible Messages API.
+It is a routing and billing layer, not a model host. Each request is routed to
+the model vendor's own API.
+
+Examples:
+
+\begin{verbatim}
+qwen3.7-plus
+minimax-m3
+qwen3.7-max
+\end{verbatim}
+
+Claude Code validates model names locally before sending requests. If you try
+to call Claude Code directly with an OpenCode Go model, Claude Code rejects it
+before the request is useful:
+
+\begin{verbatim}
+ANTHROPIC_BASE_URL=https://opencode.ai/zen/go/v1 \
+ANTHROPIC_API_KEY=... \
+claude --model qwen3.7-plus
+\end{verbatim}
+
+The proxy solves this by letting Claude Code think it is using a normal Claude
+alias such as \code{sonnet}, while the proxy rewrites the outgoing request to
+use the OpenCode Go model.
+
+\section{Model Compatibility}
+
+Each upstream provider implements its own Anthropic-compatible endpoint, so
+compatibility varies. Claude Code sends a full Anthropic-style payload,
+including tools, cache control, tool choice, and Anthropic beta headers.
+
+\begin{longtable}{|p{0.24\linewidth}|p{0.22\linewidth}|p{0.43\linewidth}|}
+\hline
+\textbf{Model id} & \textbf{Provider} & \textbf{Works with Claude Code harness?} \\
+\hline
+\code{qwen3.7-plus} & Alibaba (Qwen) & Yes \\
+\hline
+\code{minimax-m3} & MiniMax & Yes \\
+\hline
+\code{glm-5.2} & Z.ai (Zhipu AI) & No; invalid API parameter \\
+\hline
+\code{glm-5.1} & Z.ai (Zhipu AI) & No; same as \code{glm-5.2} \\
+\hline
+\code{kimi-k2.7-code} & Moonshot AI & No; rejects tool function name format \\
+\hline
+\code{deepseek-v4-pro} & DeepSeek & No; expects OpenAI tool shape \\
+\hline
+\end{longtable}
+
+Models from the same vendor generally behave like the tested one. Unverified
+models should be tested before relying on them.
+
+Practical recommendation:
+
+\begin{verbatim}
+export OPENCODE_GO_MODEL="qwen3.7-plus"   # or minimax-m3
+\end{verbatim}
+
+\section{Request Flow}
+
+When you run:
+
+\begin{verbatim}
+./claude-o-go -p "Reply with exactly: OK"
+\end{verbatim}
+
+the flow is:
+
+\begin{enumerate}
+  \item \code{claude-o-go} reads the OpenCode Go API key from \code{.env}.
+  \item It starts the local proxy at \code{http://127.0.0.1:4141}.
+  \item It sets \code{ANTHROPIC\_BASE\_URL=http://127.0.0.1:4141}.
+  \item It starts Claude Code with \code{claude --bare --model sonnet}.
+  \item Claude Code sends a request to \code{/v1/messages}.
+  \item The proxy changes the request body model to the OpenCode Go model.
+  \item The proxy forwards the request to \code{https://opencode.ai/zen/go/v1/messages}.
+  \item OpenCode Go returns the model response.
+  \item The proxy streams the response back to Claude Code.
+\end{enumerate}
+
+\section{Important Files}
+
+\subsection{\code{claude-o-go}}
+
+The launcher exports the API key, model, and local base URL, then starts
+Claude Code:
+
+\begin{verbatim}
+export OPENCODE_GO_API_KEY="$api_key"
+export OPENCODE_GO_MODEL="$model"
+export ANTHROPIC_BASE_URL="http://127.0.0.1:${proxy_port}"
+claude --bare --model "$claude_model_alias" "$@"
+\end{verbatim}
+
+Important defaults and environment variables:
+
+\begin{itemize}
+  \item \code{OPENCODE\_GO\_MODEL}: required; no hardcoded launcher default.
+  \item \code{OPENCODE\_GO\_PROXY\_PORT=4141}.
+  \item \code{CLAUDE\_CODE\_MODEL\_ALIAS=sonnet}.
+  \item \code{CLAUDE\_CODE\_OPENCODE\_GO\_BARE=1}.
+\end{itemize}
+
+\subsection{\code{opencode-go-claude-proxy.mjs}}
+
+The proxy's core rewrite is:
+
+\begin{verbatim}
+body.model = model
+\end{verbatim}
+
+For generation requests, the proxy streams OpenCode Go's response back to
+Claude Code. It handles Node stream backpressure and aborts the upstream
+request if Claude Code closes the local connection, so a transient
+\code{connection interrupted} message should not take down the proxy process.
+
+The proxy also implements endpoints Claude Code probes:
+
+\begin{verbatim}
+HEAD /
+HEAD /v1
+GET /v1/models
+POST /v1/messages/count_tokens
+POST /v1/messages
+\end{verbatim}
+
+\section{Local Checks}
+
+Before pushing changes, run:
+
+\begin{verbatim}
+npm run check
+\end{verbatim}
+
+That syntax-checks both JavaScript entry points.
+
+\section{Verification}
+
+Run:
+
+\begin{verbatim}
+./claude-o-go -p "Reply with exactly: OK"
+\end{verbatim}
+
+Look for proxy log lines like:
+
+\begin{verbatim}
+OpenCode Go Claude proxy listening on http://127.0.0.1:4141/v1 -> qwen3.7-plus
+POST /v1/messages
+POST /messages -> 200 as qwen3.7-plus
+OK
+\end{verbatim}
+
+The key line is:
+
+\begin{verbatim}
+POST /messages -> 200 as qwen3.7-plus
+\end{verbatim}
+
+That means Claude Code sent a request to the local proxy, the proxy forwarded it
+to OpenCode Go, OpenCode Go returned HTTP 200, and the upstream model was
+\code{qwen3.7-plus}.
+
+\section{Common Problems}
+
+\subsection{\code{There's an issue with the selected model}}
+
+Use the launcher:
+
+\begin{verbatim}
+./claude-o-go
+\end{verbatim}
+
+Do not call \code{claude --model qwen3.7-plus} directly.
+
+\subsection{Double \code{/v1/v1/messages}}
+
+\code{ANTHROPIC\_BASE\_URL} should point to the proxy root:
+
+\begin{verbatim}
+http://127.0.0.1:4141
+\end{verbatim}
+
+It should not include \code{/v1}, because Claude Code appends
+\code{/v1/messages} itself.
+
+\subsection{Claude Code Shows \code{sonnet}}
+
+That is expected. Claude Code sees \code{sonnet}; OpenCode Go receives
+\code{qwen3.7-plus}. The proxy log is the source of truth.
+
+\section{Mental Model}
+
+\begin{verbatim}
+Claude Code CLI
+  thinks model = sonnet
+  sends Anthropic request
+        |
+        v
+Local proxy
+  rewrites model = qwen3.7-plus
+  forwards request
+        |
+        v
+OpenCode Go
+  runs the actual model
+  returns response
+        |
+        v
+Claude Code CLI
+  displays the answer
+\end{verbatim}
+
+The Claude Code user experience stays the same, but the model backend is
+OpenCode Go.
+
+\end{document}

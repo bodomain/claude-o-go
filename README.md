@@ -21,6 +21,7 @@ OpenCode Go does not provide Claude models. It provides open coding models (e.g.
 - `.env` — your OpenCode Go API key.
 
 For a full walkthrough, read `TUTORIAL.md`. Eine deutsche Version gibt es in `TUTORIAL.de.md`.
+Typeset versions are available as `TUTORIAL.tex` / `TUTORIAL.pdf` and `TUTORIAL.de.tex` / `TUTORIAL.de.pdf`.
 
 ## Quick start
 
